@@ -29,7 +29,7 @@ def confirm_result(raw, data):
                 if data[k] != old_data[raw][k]:
                     old_data[raw][k] = data[k]
         else:
-            old_data["raw"] = data
+            old_data[raw] = data
         results_file.write(json.dumps(old_data))
     else:
         results_file.write(json.dumps({raw : data}))
@@ -57,18 +57,20 @@ async def check_phone(phone):
     for added_user in result.users:
         found = True
         logging.info("Got info about user with phone {}".format(phone))
-        user_info = await client(DeleteContactsRequest(id=[added_user.id])) # We delete user from contacts, because in "result" will be
-        confirm_result(raw=phone, data=configure_user(result=True, raw_data=user_info)) # not actual info in fields first_name and last_name
+        update = await client(DeleteContactsRequest(id=[added_user.id])) # We delete user from contacts, because in "result" will be
+        for user_info in update.users:
+            confirm_result(raw=phone, data=configure_user(result=True, raw_data=user_info)) # not actual info in fields first_name and last_name
                                                                                 # because we set them to "t". We get actual info when we delete him
     if not found:
         confirm_result(raw=phone, data=configure_user(result=False, raw_data="End of requests limit or no user with this phone"))
+    
+    await client.disconnect()
 
 async def check_username(username):
     logging.info("Check username {}".format(username))
     while True:
         try:
             user_info = await client(GetFullUserRequest(username))
-            break
         except ValueError:
             logging.info("Value Error. No user with this username")
             confirm_result(raw=username, data=configure_user(result=False, raw_data="User with this username not found"))
@@ -82,7 +84,9 @@ async def check_username(username):
             asyncio.sleep(err.seconds)
             continue
         logging.info("Got info about user with username {}".format(username))
-        confirm_result(raw=username, data=configure_user(result=True, raw_data=user_info))
+        confirm_result(raw=username, data=configure_user(result=True, raw_data=user_info.user))
+        break
+    await client.disconnect()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Check username or phone number")
@@ -94,14 +98,12 @@ if __name__ == "__main__":
 
     client = TelegramClient(StringSession(s_string), API_ID, API_HASH, proxy=proxy).start()
 
-    loop = asyncio.get_event_loop()
-
     if args.p:
         phone = "".join(filter(str.isdigit, args.p))
         if len(phone) == 11 and phone.startswith("8"):
             phone = "7" + phone[1:]
-        loop.run_until_complete(check_phone(phone))
+        client.loop.create_task(check_phone(phone))
     elif args.u:
-        loop.run_until_complete(check_username(args.u))
+        client.loop.create_task(check_username(args.u))
 
     client.run_until_disconnected()
