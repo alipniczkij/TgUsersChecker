@@ -1,6 +1,7 @@
 # TgUsersChecker
 
 This service can be used to check if available telegram user by phone or username
+Set your own API_ID, API_HASH and Session_string
 
         python main.py -u <username>
         python main.py -p <phone>
